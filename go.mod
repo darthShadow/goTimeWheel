@@ -1,3 +1,3 @@
-module github.com/zheng-ji/goTimeWheel
+module github.com/darthShadow/goTimeWheel
 
-go 1.12
+go 1.17
