@@ -1,7 +1,6 @@
 package goTimeWheel
 
 import (
-	"container/list"
 	"time"
 )
 
@@ -11,14 +10,14 @@ type TimeWheel struct {
 
 	ticker *time.Ticker
 
-	slots []*list.List
+	slots [][]*Task
 
-	keyPosMap map[interface{}]int // keep each timer's postion
+	keyPosMap map[interface{}]int // keep each timer's position
 
 	slotNum int
-	currPos int // timewheel current postion
+	currPos int // timewheel current position
 
-	addChannel    chan Task        // channel to  add Task
+	addChannel    chan Task        // channel to add Task
 	removeChannel chan interface{} // channel to remove Task
 	stopChannel   chan bool        // stop signal
 }
@@ -31,11 +30,11 @@ type Task struct {
 	circle int           // when circle equal 0 will trigger
 
 	fn     func(interface{}) // custom function
-	params interface{}       // custom parms
+	params interface{}       // custom params
 }
 
-// New Func: Generate TimeWheel with ticker and slotNum
-func New(interval time.Duration, slotNum int) *TimeWheel {
+// NewTimeWheel Func: Generate TimeWheel with ticker and slotNum
+func NewTimeWheel(interval time.Duration, slotNum int) *TimeWheel {
 
 	if interval <= 0 || slotNum <= 0 {
 		return nil
@@ -43,7 +42,7 @@ func New(interval time.Duration, slotNum int) *TimeWheel {
 
 	tw := &TimeWheel{
 		interval:      interval,
-		slots:         make([]*list.List, slotNum),
+		slots:         make([][]*Task, slotNum),
 		keyPosMap:     make(map[interface{}]int),
 		currPos:       0,
 		slotNum:       slotNum,
@@ -53,7 +52,7 @@ func New(interval time.Duration, slotNum int) *TimeWheel {
 	}
 
 	for i := 0; i < slotNum; i++ {
-		tw.slots[i] = list.New()
+		tw.slots[i] = make([]*Task, 16)
 	}
 
 	return tw
@@ -101,62 +100,59 @@ func (tw *TimeWheel) RemoveTimer(key interface{}) {
 
 // handle Func: Do currPosition slots Task
 func (tw *TimeWheel) handle() {
-	l := tw.slots[tw.currPos]
+	currentSlice := tw.slots[tw.currPos]
+	newSlice := make([]*Task, 16)
 
-	for e := l.Front(); e != nil; {
-		curElement := e
-		task := e.Value.(*Task)
-		next := e.Next()
-		e = next
-		if task.circle > 0 {
-			task.circle--
+	for _, task := range currentSlice {
+		if task == nil {
 			continue
 		}
-
+		if task.circle > 0 {
+			task.circle--
+			newSlice = append(newSlice, task)
+			continue
+		}
 		go task.fn(task.params)
-
-		l.Remove(curElement)
 		if task.key != nil {
 			delete(tw.keyPosMap, task.key)
 		}
 	}
 
+	tw.slots[tw.currPos] = newSlice
 	tw.currPos = (tw.currPos + 1) % tw.slotNum
 }
 
-// getPosAndCircle Func: parse duration by interval to get circle and position
-func (tw *TimeWheel) getPosAndCircle(d time.Duration) (pos int, circle int) {
+// getSlotNumAndCircle Func: parse duration by interval to get slotNum and circle.
+func (tw *TimeWheel) getSlotNumAndCircle(d time.Duration) (slotNum int, circle int) {
+	// circle represents how many iterations of the slots to wait before executing the task
 	circle = int(d.Seconds()) / int(tw.interval.Seconds()) / tw.slotNum
-
-	pos = (tw.currPos + int(d.Seconds())/int(tw.interval.Seconds())) % tw.slotNum
+	slotNum = (tw.currPos + int(d.Seconds())/int(tw.interval.Seconds())) % tw.slotNum
 	return
 }
 
 func (tw *TimeWheel) addTask(task *Task) {
-	pos, circle := tw.getPosAndCircle(task.delay)
+	slotNum, circle := tw.getSlotNumAndCircle(task.delay)
 	task.circle = circle
 
-	tw.slots[pos].PushBack(task)
+	tw.slots[slotNum] = append(tw.slots[slotNum], task)
+
 	if task.key != nil {
-		tw.keyPosMap[task.key] = pos
+		tw.keyPosMap[task.key] = slotNum
 	}
 }
 
 func (tw *TimeWheel) removeTask(key interface{}) {
-	pos, ok := tw.keyPosMap[key]
+	slotNum, ok := tw.keyPosMap[key]
 	if !ok {
 		return
 	}
 
-	l := tw.slots[pos]
+	slotSlice := tw.slots[slotNum]
 
-	for e := l.Front(); e != nil; {
-		task := e.Value.(*Task)
+	for taskIdx, task := range slotSlice {
 		if task.key == key {
+			slotSlice[taskIdx] = nil
 			delete(tw.keyPosMap, task.key)
-			l.Remove(e)
 		}
-
-		e = e.Next()
 	}
 }
