@@ -17,9 +17,12 @@ type TimeWheel struct {
 	slotNum int
 	currPos int // timewheel current position
 
-	addChannel    chan Task        // channel to add Task
-	removeChannel chan interface{} // channel to remove Task
-	stopChannel   chan bool        // stop signal
+	addChannel     chan Task        // channel to add Task
+	removeChannel  chan interface{} // channel to remove Task
+	refreshChannel chan Task        // channel to refresh the timer of a Task
+	getChannel     chan GetTask     // channel to get Task
+
+	stopChannel chan bool // stop signal
 }
 
 // Task Struct
@@ -33,22 +36,30 @@ type Task struct {
 	params interface{}       // custom params
 }
 
-// NewTimeWheel Func: Generate TimeWheel with ticker and slotNum
-func NewTimeWheel(interval time.Duration, slotNum int) *TimeWheel {
+// GetTask Struct
+type GetTask struct {
+	key         interface{}
+	taskChannel chan *Task
+}
+
+// New Func: Generate TimeWheel with ticker and slotNum
+func New(interval time.Duration, slotNum int) *TimeWheel {
 
 	if interval <= 0 || slotNum <= 0 {
 		return nil
 	}
 
 	tw := &TimeWheel{
-		interval:      interval,
-		slots:         make([][]*Task, slotNum),
-		keyPosMap:     make(map[interface{}]int),
-		currPos:       0,
-		slotNum:       slotNum,
-		addChannel:    make(chan Task),
-		removeChannel: make(chan interface{}),
-		stopChannel:   make(chan bool),
+		interval:       interval,
+		slots:          make([][]*Task, slotNum),
+		keyPosMap:      make(map[interface{}]int),
+		currPos:        0,
+		slotNum:        slotNum,
+		addChannel:     make(chan Task, 1),
+		removeChannel:  make(chan interface{}, 1),
+		refreshChannel: make(chan Task, 1),
+		getChannel:     make(chan GetTask, 1),
+		stopChannel:    make(chan bool),
 	}
 
 	for i := 0; i < slotNum; i++ {
@@ -62,22 +73,6 @@ func NewTimeWheel(interval time.Duration, slotNum int) *TimeWheel {
 func (tw *TimeWheel) Start() {
 	tw.ticker = time.NewTicker(tw.interval)
 	go tw.start()
-}
-
-func (tw *TimeWheel) start() {
-	for {
-		select {
-		case <-tw.ticker.C:
-			tw.handle()
-		case task := <-tw.addChannel:
-			tw.addTask(&task)
-		case key := <-tw.removeChannel:
-			tw.removeTask(key)
-		case <-tw.stopChannel:
-			tw.ticker.Stop()
-			return
-		}
-	}
 }
 
 func (tw *TimeWheel) Stop() {
@@ -98,7 +93,46 @@ func (tw *TimeWheel) RemoveTimer(key interface{}) {
 	tw.removeChannel <- key
 }
 
-// handle Func: Do currPosition slots Task
+func (tw *TimeWheel) RefreshTimer(delay time.Duration, key interface{}, fn func(interface{}), params interface{}) {
+	if delay < 0 {
+		return
+	}
+	tw.refreshChannel <- Task{delay: delay, key: key, fn: fn, params: params}
+}
+
+func (tw *TimeWheel) GetTimer(key interface{}) (delay time.Duration, fn func(interface{}), params interface{}) {
+	taskChannel := make(chan *Task, 1)
+	tw.getChannel <- GetTask{key: key, taskChannel: taskChannel}
+	task := <-taskChannel
+	close(taskChannel)
+	if task != nil {
+		return task.delay, task.fn, task.params
+	}
+	return time.Duration(0), nil, nil
+}
+
+func (tw *TimeWheel) start() {
+	for {
+		select {
+		case task := <-tw.addChannel:
+			tw.addTask(&task)
+		case key := <-tw.removeChannel:
+			tw.removeTask(key)
+		case task := <-tw.refreshChannel:
+			tw.removeTask(task.key)
+			tw.addTask(&task)
+		case getTask := <-tw.getChannel:
+			getTask.taskChannel <- tw.getTask(getTask.key)
+		case <-tw.ticker.C:
+			tw.handle()
+		case <-tw.stopChannel:
+			tw.ticker.Stop()
+			return
+		}
+	}
+}
+
+// handle Func: Process Task from currPosition slots
 func (tw *TimeWheel) handle() {
 	currentSlice := tw.slots[tw.currPos]
 	newSlice := make([]*Task, 16)
@@ -153,6 +187,24 @@ func (tw *TimeWheel) removeTask(key interface{}) {
 		if task.key == key {
 			slotSlice[taskIdx] = nil
 			delete(tw.keyPosMap, task.key)
+			return
 		}
 	}
+}
+
+func (tw *TimeWheel) getTask(key interface{}) (task *Task) {
+	slotNum, ok := tw.keyPosMap[key]
+	if !ok {
+		return nil
+	}
+
+	slotSlice := tw.slots[slotNum]
+
+	for _, task := range slotSlice {
+		if task.key == key {
+			return task
+		}
+	}
+
+	return nil
 }

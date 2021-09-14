@@ -1,35 +1,39 @@
 ## goTimeWheel
 
-[![Build Status](https://travis-ci.org/zheng-ji/goTimeWheel.svg)](https://travis-ci.org/zheng-ji/goTimeWheel)
-[![codecov](https://codecov.io/gh/zheng-ji/goTimeWheel/branch/master/graph/badge.svg)](https://codecov.io/gh/zheng-ji/goTimeWheel)
-[![GoDoc](https://godoc.org/github.com/zheng-ji/goTimeWheele?status.svg)](https://godoc.org/github.com/zheng-ji/goTimeWheel)
+[![Build Status](https://travis-ci.org/darthShadow/goTimeWheel.svg)](https://travis-ci.org/darthShadow/goTimeWheel)
+[![codecov](https://codecov.io/gh/darthShadow/goTimeWheel/branch/master/graph/badge.svg)](https://codecov.io/gh/darthShadow/goTimeWheel)
+[![GoDoc](https://godoc.org/github.com/darthShadow/goTimeWheele?status.svg)](https://godoc.org/github.com/darthShadow/goTimeWheel)
 
 TimeWheel Implemented By Go.
-Go 实现的时间轮，俗称定时器 [Link](http://zheng-ji.info/2019/10/11/2019-10-11-timewheel/)
 
-![goTimeWheel](https://github.com/zheng-ji/goTimeWheel/blob/master/goTimeWheel.png)
+![goTimeWheel](https://github.com/darthShadow/goTimeWheel/blob/master/goTimeWheel.png)
 
 Feature
 --------
 
 * Effective at Space Usage
-* Each Timer Can Custom Its Task
+* Each Timer can Customize its Task
+* Add, Remove, Refresh & Get Task
 
 
 Installation
 -------------
 
 ```
-go get github.com/zheng-ji/goTimeWheel
+go get github.com/darthShadow/goTimeWheel
 ```
 
 Example
 -------
 
 ```go
+package main
+
 import (
     "fmt"
-    "github.com/zheng-ji/goTimeWheel"
+    "time"
+    
+    "github.com/darthShadow/goTimeWheel"
 )
 
 func main() {
@@ -56,4 +60,5 @@ License
 -------
 
 Copyright (c) 2019 by [zheng-ji](http://zheng-ji.info) released under MIT License.
+Copyright (c) 2021 by [darthShadow]() released under MIT License.
 
