@@ -63,7 +63,7 @@ func New(interval time.Duration, slotNum int) *TimeWheel {
 	}
 
 	for i := 0; i < slotNum; i++ {
-		tw.slots[i] = make([]*Task, 16)
+		tw.slots[i] = make([]*Task, 0, 16)
 	}
 
 	return tw
@@ -135,7 +135,7 @@ func (tw *TimeWheel) start() {
 // handle Func: Process Task from currPosition slots
 func (tw *TimeWheel) handle() {
 	currentSlice := tw.slots[tw.currPos]
-	newSlice := make([]*Task, 16)
+	newSlice := make([]*Task, 0, 16)
 
 	for _, task := range currentSlice {
 		if task == nil {
@@ -184,6 +184,9 @@ func (tw *TimeWheel) removeTask(key interface{}) {
 	slotSlice := tw.slots[slotNum]
 
 	for taskIdx, task := range slotSlice {
+		if task == nil {
+			continue
+		}
 		if task.key == key {
 			slotSlice[taskIdx] = nil
 			delete(tw.keyPosMap, task.key)
@@ -201,6 +204,9 @@ func (tw *TimeWheel) getTask(key interface{}) (task *Task) {
 	slotSlice := tw.slots[slotNum]
 
 	for _, task := range slotSlice {
+		if task == nil {
+			continue
+		}
 		if task.key == key {
 			return task
 		}
